@@ -75,10 +75,9 @@ class Post(HeaderBaseModel):
 
     def __str__(self):
         return self.title
-    
-    # Метод для подсчета количества комментариев
+
     def comment_count(self):
-        return self.comments.count()
+        return self.comment.count()
 
 
 class Comment(models.Model):
