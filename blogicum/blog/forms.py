@@ -1,6 +1,5 @@
 from django import forms
 from .models import Post, Comment
-from django.core.mail import send_mail
 from django.contrib.auth.forms import UserChangeForm
 from django.contrib.auth.models import User
 

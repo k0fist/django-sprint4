@@ -151,7 +151,6 @@ class PostCreateView(LoginRequiredMixin, AllPostMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.author = self.request.user
-        response = super().form_valid(form)
         return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
