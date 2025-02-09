@@ -1,12 +1,11 @@
 from django import forms
 from .models import Post, Comment
+from django.core.mail import send_mail
 from django.contrib.auth.forms import UserChangeForm
 from django.contrib.auth.models import User
-from django.core.mail import send_mail
 
 
 class PostForm(forms.ModelForm):
-
     class Meta:
         model = Post
         exclude = ('author',)
@@ -16,7 +15,6 @@ class PostForm(forms.ModelForm):
 
 
 class CommentForm(forms.ModelForm):
-    
     class Meta:
         model = Comment
         fields = ('text',)
