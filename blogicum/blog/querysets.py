@@ -13,7 +13,7 @@ class PostManager(models.Manager):
             'location',
             'category',
             'author')
-    
+
     def published_for_category(self, category):
         """Возвращает опубликованные посты для конкретной категории."""
         return self.published().filter(category=category)

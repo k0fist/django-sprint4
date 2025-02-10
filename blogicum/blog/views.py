@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404, render, redirect
-from django.http import HttpResponseRedirect, Http404
+from django.http import Http404
 from django.urls import reverse_lazy, reverse
 from django.core.paginator import Paginator
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
@@ -189,7 +189,7 @@ class PostUpdateView(AuthorPostMixin, UpdateView):
     """CBV для редактирования поста."""
 
     form_class = PostForm
-    
+
     def get_success_url(self):
         return reverse('blog:post_detail', args=[self.kwargs['post_pk']])
 
