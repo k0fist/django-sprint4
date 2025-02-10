@@ -12,12 +12,12 @@ urlpatterns = [
         name='edit_profile'
     ),
     path(
-        'profile/<slug:slug>/',
+        'profile/<str:username>/',
         views.ProfileUserView.as_view(),
         name='profile'
     ),
     path(
-        'posts/<int:pk>/',
+        'posts/<int:post_pk>/',
         views.PostDetailView.as_view(),
         name='post_detail'
     ),

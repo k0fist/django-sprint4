@@ -1,8 +1,9 @@
 from django.contrib import admin
 
-from .models import Category, Location, Post
+from .models import Category, Location, Post, Comment
 
 
+@admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
     list_display = (
         'title',
@@ -21,6 +22,7 @@ class PostAdmin(admin.ModelAdmin):
     list_display_links = ('title',)
 
 
+@admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     list_display = (
         'name',
@@ -33,6 +35,7 @@ class LocationAdmin(admin.ModelAdmin):
     list_display_links = ('name',)
 
 
+@admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = (
         'title',
@@ -47,8 +50,14 @@ class CategoryAdmin(admin.ModelAdmin):
     list_display_links = ('title',)
 
 
-admin.site.register(Post, PostAdmin)
-admin.site.register(Category, CategoryAdmin)
-admin.site.register(Location, LocationAdmin)
+@admin.register(Comment)
+class CommentAdmin(admin.ModelAdmin):
+    list_display = (
+        'text',
+        'post',
+        'author',
+    )
+    list_display_links = ('text',)
+
 
 admin.site.empty_value_display = 'Не задано'

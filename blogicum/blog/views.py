@@ -6,22 +6,34 @@ from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
-
+from django.db.models import Count
 from .models import Post, Category, User, Comment
-from .forms import PostForm, CommentForm, CustomUserChangeForm
+from .forms import CommentForm, PostForm, MyUserChangeForm
 
 
 MAX_POSTS = 10
 
 
+def paginate_posts(request, posts, paginate_by):
+    """Функция для пагинации постов."""
+    paginator = Paginator(posts, paginate_by)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    return page_obj
+
+
 class AuthorPostMixin:
     """Миксин для проверки авторства поста."""
+
+    model = Post
+    template_name = 'blog/create.html'
+    pk_url_kwarg = 'post_pk'
 
     def dispatch(self, request, *args, **kwargs):
         post = self.get_object()
         if post.author != request.user:
-            return HttpResponseRedirect(
-                reverse_lazy('blog:post_detail', kwargs={'pk': post.pk})
+            return redirect(
+                reverse('blog:post_detail', args=[post.pk])
             )
         return super().dispatch(request, *args, **kwargs)
 
@@ -30,9 +42,14 @@ class AuthorCommentMixin:
     """Миксин для проверки авторства комментариев."""
 
     def dispatch(self, request, *args, **kwargs):
-        comment = self.get_object()
-        if comment.author != request.user:
-            raise Http404
+        comments = self.get_object()
+        if comments.author != request.user:
+            print(kwargs)
+            return redirect(
+                reverse(
+                    'blog:post_detail',
+                    kwargs={'post_pk': self.kwargs['post_pk']})
+            )
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -40,32 +57,24 @@ class OnlyAuthorMixin(UserPassesTestMixin):
     """Миксин для проверки авторства для входа в профиль."""
 
     def test_func(self):
-        object = self.get_object()
-        return object == self.request.user
+        return self.get_object() == self.request.user
 
 
-class AllPostMixin():
-    """Миксин для всех действй с постами."""
-
-    model = Post
-
-
-class AllCommentMixin():
+class MainCommentMixin():
     """Миксин для всех действий с комментариями."""
 
     model = Comment
     template_name = 'blog/add_comment.html'
 
 
-class CreateUpdateCommentMixin(AllCommentMixin):
+class CreateUpdateCommentMixin(MainCommentMixin):
     """Миксин для создания и редактирования комментария."""
 
     form_class = CommentForm
 
     def get_success_url(self):
-        return reverse(
-            'blog:post_detail', kwargs={'pk': self.kwargs['post_pk']}
-        )
+        print(self.kwargs['post_pk'])
+        return reverse('blog:post_detail', args=[self.kwargs['post_pk']])
 
 
 class ProfileUserView(DetailView):
@@ -73,26 +82,31 @@ class ProfileUserView(DetailView):
 
     model = User
     template_name = 'blog/profile.html'
-    slug_field = 'username'
     paginate_by = MAX_POSTS
 
-    def get_object(self, queryset=None):
+    def get_object(self, user_queryset=None):
         try:
-            return User.objects.get(username=self.kwargs['slug'])
+            return User.objects.get(username=self.kwargs['username'])
         except User.DoesNotExist:
-            raise Http404
+            raise get_object_or_404(User, username=self.kwargs['username'])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.get_object()
-        posts = Post.objects.filter(author=user)
-        if self.request.user != user:
-            posts = posts.filter(is_published=True)
-        paginator = Paginator(posts, self.paginate_by)
-        page_number = self.request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        context['profile'] = user
-        context['page_obj'] = page_obj
+        author = self.get_object()
+        if self.request.user == author:
+            posts = author.posts.all().order_by(
+                '-pub_date'
+            ).annotate(comment_count=Count('comments'))
+        else:
+            posts = author.posts.published().order_by(
+                '-pub_date'
+            ).annotate(comment_count=Count('comments'))
+        context['profile'] = author
+        context['page_obj'] = paginate_posts(
+            self.request,
+            posts,
+            self.paginate_by
+        )
         return context
 
 
@@ -100,52 +114,63 @@ class ProfileUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
     """CBV для редактирования профиля."""
 
     model = User
-    form_class = CustomUserChangeForm
+    form_class = MyUserChangeForm
     template_name = 'blog/edit_profile.html'
-    success_url = reverse_lazy('blog:profile')
 
     def get_object(self, queryset=None):
         return self.request.user
 
     def get_success_url(self):
-        return reverse_lazy(
-            'blog:profile',
-            kwargs={'slug': self.request.user.username}
-        )
+        return reverse('blog:profile', args=[self.request.user.username])
 
 
-class PostListView(AllPostMixin, ListView):
+class PostListView(ListView):
     """CBV для страницы с постами."""
 
-    queryset = Post.objects.published().select_related(
-        'location',
-        'category',
-        'author'
-    )
+    model = Post
     template_name = 'blog/index.html'
-    ordering = '-pub_date'
     paginate_by = MAX_POSTS
 
-
-class PostDetailView(AllPostMixin, DetailView):
-    """CBV для просмотра страницы поста."""
-
-    template_name = 'blog/post_detail.html'
+    def get_queryset(self):
+        queryset = Post.objects.published().order_by(
+            '-pub_date'
+        ).annotate(comment_count=Count('comments'))
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        post = self.object
-        if not post.is_published:
-            if post.author != self.request.user:
-                raise Http404()
-        context['form'] = CommentForm()
-        context['comments'] = self.object.comment.select_related('author')
         return context
 
 
-class PostCreateView(LoginRequiredMixin, AllPostMixin, CreateView):
+class PostDetailView(DetailView):
+    """CBV для просмотра страницы поста."""
+
+    model = Post
+    template_name = 'blog/post_detail.html'
+    posts = Post.objects.annotate(comment_count=Count('comments'))
+
+    def get_object(self):
+        pk = self.kwargs.get('post_pk')
+        return get_object_or_404(Post, pk=pk)
+
+    def get_post(self):
+        post = self.get_object()
+        if not post.is_published and post.author != self.request.user:
+            raise Http404
+        return post
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = CommentForm()
+        context['comments'] = self.object.comments.select_related('author')
+        context['post'] = self.get_post()
+        return context
+
+
+class PostCreateView(LoginRequiredMixin, CreateView):
     """CBV для создания поста."""
 
+    model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
 
@@ -154,36 +179,25 @@ class PostCreateView(LoginRequiredMixin, AllPostMixin, CreateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        return reverse_lazy(
+        return reverse(
             'blog:profile',
-            kwargs={'slug': self.request.user.username}
+            args=[self.request.user.username]
         )
 
 
-class PostUpdateView(AuthorPostMixin, AllPostMixin, UpdateView):
+class PostUpdateView(AuthorPostMixin, UpdateView):
     """CBV для редактирования поста."""
 
     form_class = PostForm
-    template_name = 'blog/create.html'
-
+    
     def get_success_url(self):
-        return reverse_lazy(
-            'blog:post_detail',
-            kwargs={'pk': self.object.pk}
-        )
-
-    def get_object(self, queryset=None):
-        return get_object_or_404(Post, pk=self.kwargs['post_pk'])
+        return reverse('blog:post_detail', args=[self.kwargs['post_pk']])
 
 
-class PostDeleteView(AuthorPostMixin, AllPostMixin, DeleteView):
+class PostDeleteView(AuthorPostMixin, DeleteView):
     """CBV для удаления поста."""
 
-    template_name = 'blog/create.html'
     success_url = reverse_lazy('blog:index')
-
-    def get_object(self, queryset=None):
-        return get_object_or_404(Post, pk=self.kwargs['post_pk'])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -191,11 +205,6 @@ class PostDeleteView(AuthorPostMixin, AllPostMixin, DeleteView):
         form = PostForm(instance=post)
         context['form'] = form
         return context
-
-    def post(self, request, *args, **kwargs):
-        post = self.get_object()
-        post.delete()
-        return redirect(reverse_lazy('blog:index'))
 
 
 class CommentCreateView(
@@ -216,29 +225,17 @@ class CommentUpdateView(
         UpdateView):
     """CBV для редактирования комментария."""
 
-    def get_object(self, queryset=None):
-        return get_object_or_404(Comment, pk=self.kwargs['comment_pk'])
+    pk_url_kwarg = 'comment_pk'
 
 
-class CommentDeleteView(AuthorCommentMixin, AllCommentMixin, DeleteView):
+class CommentDeleteView(AuthorCommentMixin, MainCommentMixin, DeleteView):
     """CBV для удаления комментария."""
 
-    def get_object(self, queryset=None):
-        post = get_object_or_404(Post, pk=self.kwargs['post_pk'])
-        comment = get_object_or_404(
-            Comment,
-            pk=self.kwargs['comment_pk'],
-            post=post
-        )
-        return comment
+    pk_url_kwarg = 'comment_pk'
 
-    def post(self, request, *args, **kwargs):
-        comment = self.get_object()
-        comment.delete()
-        return redirect(reverse_lazy(
-            'blog:post_detail',
-            kwargs={'pk': comment.post.pk})
-        )
+    def get_success_url(self):
+        comment = self.get_object()  # Получаем объект комментария
+        return reverse('blog:post_detail', kwargs={'post_pk': comment.post.pk})
 
 
 def category_posts(request, category_slug):
@@ -248,12 +245,11 @@ def category_posts(request, category_slug):
         is_published=True
     )
 
-    posts = category.posts.published()
-    paginator = Paginator(posts, MAX_POSTS)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    posts = category.posts.published_for_category(
+        category
+    ).order_by('-pub_date').annotate(comment_count=Count('comments'))
     context = {
-        'page_obj': page_obj,
+        'page_obj': paginate_posts(request, posts, MAX_POSTS),
         'category': category,
     }
     return render(request, 'blog/category.html', context)
