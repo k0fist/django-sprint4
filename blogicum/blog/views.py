@@ -1,25 +1,24 @@
-from django.shortcuts import get_object_or_404, render, redirect
+from django.db.models import Count
 from django.http import Http404
+from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
-from django.core.paginator import Paginator
+
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
-from django.db.models import Count
+
 from .models import Post, Category, User, Comment
-from .forms import CommentForm, PostForm, MyUserChangeForm
+from .forms import CommentForm, PostForm, BlogicumUserChangeForm
 
 
 MAX_POSTS = 10
 
 
-def paginate_posts(request, posts, paginate_by):
+def paginate_posts(request, posts, paginate_by=MAX_POSTS):
     """Функция для пагинации постов."""
-    paginator = Paginator(posts, paginate_by)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    return page_obj
+    return Paginator(posts, paginate_by).get_page(request.GET.get('page'))
 
 
 class AuthorPostMixin:
@@ -73,7 +72,6 @@ class CreateUpdateCommentMixin(MainCommentMixin):
     form_class = CommentForm
 
     def get_success_url(self):
-        print(self.kwargs['post_pk'])
         return reverse('blog:post_detail', args=[self.kwargs['post_pk']])
 
 
@@ -85,27 +83,20 @@ class ProfileUserView(DetailView):
     paginate_by = MAX_POSTS
 
     def get_object(self, user_queryset=None):
-        try:
-            return User.objects.get(username=self.kwargs['username'])
-        except User.DoesNotExist:
-            raise get_object_or_404(User, username=self.kwargs['username'])
+        return get_object_or_404(User, username=self.kwargs['username'])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         author = self.get_object()
-        if self.request.user == author:
-            posts = author.posts.all().order_by(
-                '-pub_date'
-            ).annotate(comment_count=Count('comments'))
-        else:
-            posts = author.posts.published().order_by(
-                '-pub_date'
-            ).annotate(comment_count=Count('comments'))
+        posts = (
+            author.posts.all()
+            if self.request.user == author
+            else author.posts.published(filter_date=True, filter_category=True)
+        )
         context['profile'] = author
         context['page_obj'] = paginate_posts(
             self.request,
-            posts,
-            self.paginate_by
+            posts
         )
         return context
 
@@ -114,7 +105,7 @@ class ProfileUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
     """CBV для редактирования профиля."""
 
     model = User
-    form_class = MyUserChangeForm
+    form_class = BlogicumUserChangeForm
     template_name = 'blog/edit_profile.html'
 
     def get_object(self, queryset=None):
@@ -132,14 +123,9 @@ class PostListView(ListView):
     paginate_by = MAX_POSTS
 
     def get_queryset(self):
-        queryset = Post.objects.published().order_by(
-            '-pub_date'
-        ).annotate(comment_count=Count('comments'))
-        return queryset
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        return context
+        return Post.objects.published(
+            filter_date=True, filter_category=True
+        )
 
 
 class PostDetailView(DetailView):
@@ -151,11 +137,10 @@ class PostDetailView(DetailView):
 
     def get_object(self):
         pk = self.kwargs.get('post_pk')
-        return get_object_or_404(Post, pk=pk)
-
-    def get_post(self):
-        post = self.get_object()
-        if not post.is_published and post.author != self.request.user:
+        post = get_object_or_404(Post, pk=pk)
+        if self.request.user == post.author:
+            return post
+        if not post.is_published:
             raise Http404
         return post
 
@@ -163,7 +148,7 @@ class PostDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentForm()
         context['comments'] = self.object.comments.select_related('author')
-        context['post'] = self.get_post()
+        context['post'] = self.get_object()
         return context
 
 
@@ -234,8 +219,9 @@ class CommentDeleteView(AuthorCommentMixin, MainCommentMixin, DeleteView):
     pk_url_kwarg = 'comment_pk'
 
     def get_success_url(self):
-        comment = self.get_object()  # Получаем объект комментария
-        return reverse('blog:post_detail', kwargs={'post_pk': comment.post.pk})
+        return reverse(
+            'blog:post_detail',
+            kwargs={'post_pk': self.kwargs['comment_pk']})
 
 
 def category_posts(request, category_slug):
@@ -245,11 +231,11 @@ def category_posts(request, category_slug):
         is_published=True
     )
 
-    posts = category.posts.published_for_category(
-        category
-    ).order_by('-pub_date').annotate(comment_count=Count('comments'))
+    posts = category.posts.published(
+        filter_date=True, filter_category=True
+    )
     context = {
-        'page_obj': paginate_posts(request, posts, MAX_POSTS),
+        'page_obj': paginate_posts(request, posts),
         'category': category,
     }
     return render(request, 'blog/category.html', context)

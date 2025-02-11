@@ -1,19 +1,23 @@
+from django.db.models import Count
 from django.db import models
 from django.utils import timezone
 
 
 class PostManager(models.Manager):
 
-    def published(self):
-        return self.filter(
-            pub_date__lt=timezone.now(),
-            is_published=True,
-            category__is_published=True
-        ).select_related(
+    def published(self, filter_date=True, filter_category=True):
+        queryset = self.all()
+
+        if filter_date:
+            queryset = queryset.filter(pub_date__lt=timezone.now())
+
+        if filter_category:
+            queryset = queryset.filter(
+                is_published=True,
+                category__is_published=True
+            )
+        return queryset.select_related(
             'location',
             'category',
-            'author')
-
-    def published_for_category(self, category):
-        """Возвращает опубликованные посты для конкретной категории."""
-        return self.published().filter(category=category)
+            'author'
+        ).order_by('-pub_date').annotate(comment_count=Count('comments'))

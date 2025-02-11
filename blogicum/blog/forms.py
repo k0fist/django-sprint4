@@ -19,7 +19,7 @@ class CommentForm(forms.ModelForm):
         fields = ('text',)
 
 
-class MyUserChangeForm(UserChangeForm):
+class BlogicumUserChangeForm(UserChangeForm):
     class Meta:
         model = User
         fields = ('first_name', 'last_name', 'username', 'email')
