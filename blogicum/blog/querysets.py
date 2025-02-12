@@ -5,19 +5,29 @@ from django.utils import timezone
 
 class PostManager(models.Manager):
 
-    def published(self, filter_date=True, filter_category=True):
-        queryset = self.all()
-
-        if filter_date:
-            queryset = queryset.filter(pub_date__lt=timezone.now())
-
+    def published(
+        self,
+        filter_category=True,
+        select_related=True,
+        comment_count=True,
+        author=None
+    ):
+        post_queryset = self.filter(pub_date__lt=timezone.now())
         if filter_category:
-            queryset = queryset.filter(
+            post_queryset = post_queryset.filter(
                 is_published=True,
                 category__is_published=True
             )
-        return queryset.select_related(
-            'location',
-            'category',
-            'author'
-        ).order_by('-pub_date').annotate(comment_count=Count('comments'))
+        if select_related:
+            post_queryset = post_queryset.select_related(
+                'location',
+                'category',
+                'author'
+            )
+        if comment_count:
+            post_queryset = post_queryset.annotate(
+                comment_count=Count('comments')
+            )
+        if author:
+            post_queryset = post_queryset.filter(author=author)
+        return post_queryset.order_by('-pub_date')

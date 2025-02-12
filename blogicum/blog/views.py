@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
+
 from django.core.paginator import Paginator
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -16,7 +17,7 @@ from .forms import CommentForm, PostForm, BlogicumUserChangeForm
 MAX_POSTS = 10
 
 
-def paginate_posts(request, posts, paginate_by=MAX_POSTS):
+def get_paginated_posts(request, posts, paginate_by=MAX_POSTS):
     """Функция для пагинации постов."""
     return Paginator(posts, paginate_by).get_page(request.GET.get('page'))
 
@@ -43,11 +44,9 @@ class AuthorCommentMixin:
     def dispatch(self, request, *args, **kwargs):
         comments = self.get_object()
         if comments.author != request.user:
-            print(kwargs)
             return redirect(
-                reverse(
-                    'blog:post_detail',
-                    kwargs={'post_pk': self.kwargs['post_pk']})
+                'blog:post_detail',
+                self.kwargs['post_pk']
             )
         return super().dispatch(request, *args, **kwargs)
 
@@ -88,15 +87,12 @@ class ProfileUserView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         author = self.get_object()
-        posts = (
-            author.posts.all()
-            if self.request.user == author
-            else author.posts.published(filter_date=True, filter_category=True)
-        )
         context['profile'] = author
-        context['page_obj'] = paginate_posts(
+        context['page_obj'] = get_paginated_posts(
             self.request,
-            posts
+            (author.posts.published(author=author)
+                if self.request.user != author
+                else author.posts.all())
         )
         return context
 
@@ -108,7 +104,7 @@ class ProfileUpdateView(LoginRequiredMixin, OnlyAuthorMixin, UpdateView):
     form_class = BlogicumUserChangeForm
     template_name = 'blog/edit_profile.html'
 
-    def get_object(self, queryset=None):
+    def get_object(self, user_queryset=None):
         return self.request.user
 
     def get_success_url(self):
@@ -123,9 +119,7 @@ class PostListView(ListView):
     paginate_by = MAX_POSTS
 
     def get_queryset(self):
-        return Post.objects.published(
-            filter_date=True, filter_category=True
-        )
+        return Post.objects.published()
 
 
 class PostDetailView(DetailView):
@@ -136,8 +130,7 @@ class PostDetailView(DetailView):
     posts = Post.objects.annotate(comment_count=Count('comments'))
 
     def get_object(self):
-        pk = self.kwargs.get('post_pk')
-        post = get_object_or_404(Post, pk=pk)
+        post = get_object_or_404(Post, pk=self.kwargs['post_pk'])
         if self.request.user == post.author:
             return post
         if not post.is_published:
@@ -186,9 +179,7 @@ class PostDeleteView(AuthorPostMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        post = self.get_object()
-        form = PostForm(instance=post)
-        context['form'] = form
+        context['form'] = PostForm(instance=self.get_object())
         return context
 
 
@@ -220,8 +211,7 @@ class CommentDeleteView(AuthorCommentMixin, MainCommentMixin, DeleteView):
 
     def get_success_url(self):
         return reverse(
-            'blog:post_detail',
-            kwargs={'post_pk': self.kwargs['comment_pk']})
+            'blog:post_detail', args=[self.kwargs['comment_pk']])
 
 
 def category_posts(request, category_slug):
@@ -230,12 +220,8 @@ def category_posts(request, category_slug):
         slug=category_slug,
         is_published=True
     )
-
-    posts = category.posts.published(
-        filter_date=True, filter_category=True
-    )
     context = {
-        'page_obj': paginate_posts(request, posts),
+        'page_obj': get_paginated_posts(request, category.posts.published()),
         'category': category,
     }
     return render(request, 'blog/category.html', context)

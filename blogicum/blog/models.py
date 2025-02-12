@@ -42,7 +42,14 @@ class Category(PublishedAndDateBaseModel):
         ordering = ('title',)
 
     def __str__(self):
-        return self.title[:1]
+        title_display = (self.title
+                         if len(self.title) <= 50
+                         else self.title[:47] + '...')
+        description_display = (self.description
+                               if len(self.description) <= 50
+                               else self.description[:47] + '...')
+        return (f'Заголовок: {title_display}, '
+                f'Описание: {description_display}, ID: {self.slug}')
 
 
 class Location(PublishedAndDateBaseModel):
@@ -54,7 +61,10 @@ class Location(PublishedAndDateBaseModel):
         ordering = ('name',)
 
     def __str__(self):
-        return self.name[:1]
+        name_display = (self.name
+                        if len(self.name) <= 50
+                        else self.name[:47] + '...')
+        return f'Название места: {name_display}'
 
 
 class Post(PublishedAndDateBaseModel):
@@ -95,7 +105,13 @@ class Post(PublishedAndDateBaseModel):
         ordering = ('-pub_date',)
 
     def __str__(self):
-        return self.title[:1]
+        title_display = (self.title
+                         if len(self.title) <= 50
+                         else self.title[:47] + '...')
+        text_display = (self.text
+                        if len(self.text) <= 50
+                        else self.text[:47] + '...')
+        return f'Заголовок: {title_display}, Текст: {text_display}'
 
 
 class Comment(models.Model):
@@ -119,4 +135,7 @@ class Comment(models.Model):
         ordering = ('created_at',)
 
     def __str__(self):
-        return self.text.split()[0]
+        text_display = (self.text
+                        if len(self.text) <= 50
+                        else self.text[:47] + '...')
+        return f'Заголовок: {text_display}, ID: {self.post}'
