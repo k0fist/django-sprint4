@@ -42,7 +42,7 @@ class Category(PublishedAndDateBaseModel):
         ordering = ('title',)
 
     def __str__(self):
-        return ' '.join(self.title.split()[:3])
+        return self.title[:50]
 
 
 class Location(PublishedAndDateBaseModel):
@@ -54,7 +54,7 @@ class Location(PublishedAndDateBaseModel):
         ordering = ('name',)
 
     def __str__(self):
-        return ' '.join(self.name.split()[:3])
+        return self.name[:50]
 
 
 class Post(PublishedAndDateBaseModel):
@@ -95,7 +95,7 @@ class Post(PublishedAndDateBaseModel):
         ordering = ('-pub_date',)
 
     def __str__(self):
-        return ' '.join(self.title.split()[:3])
+        return self.title[:50]
 
 
 class Comment(models.Model):
@@ -119,4 +119,4 @@ class Comment(models.Model):
         ordering = ('created_at',)
 
     def __str__(self):
-        return ' '.join(self.text.split()[:3])
+        return self.text[:50]

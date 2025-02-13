@@ -5,12 +5,11 @@ from django.utils import timezone
 
 class PostManager(models.Manager):
 
-    def get_filtered_posts(
+    def filter_posts_with_comments_and_relations(
         self,
         is_published=True,
         select_related=True,
-        comment_count=True,
-        author=None
+        comment_count=True
     ):
         posts = self
         if is_published:
@@ -25,8 +24,6 @@ class PostManager(models.Manager):
                 'category',
                 'author'
             )
-        if author:
-            posts = self.filter(author=author)
         if comment_count:
             posts = posts.annotate(
                 comment_count=Count('comments')

@@ -30,7 +30,7 @@ class AuthorPostMixin:
     def dispatch(self, request, *args, **kwargs):
         post = self.get_object()
         if post.author != request.user:
-            return redirect('blog:post_detail', self.kwargs['post_pk'])
+            return redirect('blog:post_detail', self.kwargs[self.pk_url_kwarg])
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -83,7 +83,11 @@ class ProfileUserView(DetailView):
         context['profile'] = author
         context['page_obj'] = get_paginated_posts(
             self.request,
-            author.posts.get_filtered_posts(author=author)
+            (
+                author.posts.all()
+                if self.request.user == author
+                else author.posts.filter_posts_with_comments_and_relations()
+            )
         )
         return context
 
@@ -110,7 +114,7 @@ class PostListView(ListView):
     paginate_by = MAX_POSTS
 
     def get_queryset(self):
-        return Post.objects.get_filtered_posts()
+        return Post.objects.filter_posts_with_comments_and_relations()
 
 
 class PostDetailView(DetailView):
@@ -123,12 +127,11 @@ class PostDetailView(DetailView):
         post = get_object_or_404(Post, pk=self.kwargs['post_pk'])
         if self.request.user == post.author:
             return post
-        # if not post.is_published:
-        #     raise Http404
-        return get_object_or_404(Post.objects.get_filtered_posts(
-            select_related=False,
-            comment_count=False,
-        ))
+        return get_object_or_404(
+            Post.objects.filter_posts_with_comments_and_relations(
+                select_related=False,
+                comment_count=False,
+            ), pk=self.kwargs['post_pk'])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -160,7 +163,6 @@ class PostUpdateView(AuthorPostMixin, UpdateView):
     """CBV для редактирования поста."""
 
     form_class = PostForm
-    pk_url_kwarg = 'post_pk'
 
     def get_success_url(self):
         return reverse(
@@ -209,7 +211,7 @@ class CommentDeleteView(AuthorCommentMixin, MainCommentMixin, DeleteView):
     def get_success_url(self):
         return reverse(
             'blog:post_detail',
-            args=[self.kwargs[self.pk_url_kwarg]]
+            args=[self.kwargs['post_pk']]
         )
 
 
@@ -222,7 +224,7 @@ def category_posts(request, category_slug):
     context = {
         'page_obj': get_paginated_posts(
             request,
-            category.posts.get_filtered_posts()
+            category.posts.filter_posts_with_comments_and_relations()
         ),
         'category': category,
     }
