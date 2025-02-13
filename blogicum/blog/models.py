@@ -95,7 +95,6 @@ class Post(PublishedAndDateBaseModel):
         ordering = ('-pub_date',)
 
     def __str__(self):
-    
         return ' '.join(self.title.split()[:3])
 
 

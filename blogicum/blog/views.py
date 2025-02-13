@@ -1,5 +1,3 @@
-from django.db.models import Count
-from django.http import Http404
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy, reverse
 
@@ -165,7 +163,10 @@ class PostUpdateView(AuthorPostMixin, UpdateView):
     pk_url_kwarg = 'post_pk'
 
     def get_success_url(self):
-        return reverse('blog:post_detail', args=[self.kwargs[self.pk_url_kwarg]])
+        return reverse(
+            'blog:post_detail',
+            args=[self.kwargs[self.pk_url_kwarg]]
+        )
 
 
 class PostDeleteView(AuthorPostMixin, DeleteView):
