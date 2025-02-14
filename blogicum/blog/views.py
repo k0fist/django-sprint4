@@ -80,15 +80,21 @@ class ProfileUserView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         author = self.get_object()
+        # is_published = self.request.user == author
         context['profile'] = author
         context['page_obj'] = get_paginated_posts(
             self.request,
-            (
-                author.posts.all()
-                if self.request.user == author
-                else author.posts.filter_posts_with_comments_and_relations()
-            )
+            (author.posts.get_necessary_posts(is_published=False)
+             if self.request.user == author
+             else author.posts.get_necessary_posts()
+             )
+            # author.posts.get_necessary_posts(
+            #     is_published=is_published,
+            #     select_related=True,
+            #     comment_count=True
+            # )
         )
+        print(self.request.user == author)
         return context
 
 
@@ -114,7 +120,7 @@ class PostListView(ListView):
     paginate_by = MAX_POSTS
 
     def get_queryset(self):
-        return Post.objects.filter_posts_with_comments_and_relations()
+        return Post.objects.get_necessary_posts()
 
 
 class PostDetailView(DetailView):
@@ -128,7 +134,7 @@ class PostDetailView(DetailView):
         if self.request.user == post.author:
             return post
         return get_object_or_404(
-            Post.objects.filter_posts_with_comments_and_relations(
+            Post.objects.get_necessary_posts(
                 select_related=False,
                 comment_count=False,
             ), pk=self.kwargs['post_pk'])
@@ -224,7 +230,7 @@ def category_posts(request, category_slug):
     context = {
         'page_obj': get_paginated_posts(
             request,
-            category.posts.filter_posts_with_comments_and_relations()
+            category.posts.get_necessary_posts()
         ),
         'category': category,
     }

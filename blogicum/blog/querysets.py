@@ -5,7 +5,7 @@ from django.utils import timezone
 
 class PostManager(models.Manager):
 
-    def filter_posts_with_comments_and_relations(
+    def get_necessary_posts(
         self,
         is_published=True,
         select_related=True,
