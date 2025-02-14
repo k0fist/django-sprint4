@@ -5,7 +5,7 @@ from django.utils import timezone
 
 class PostManager(models.Manager):
 
-    def get_necessary_posts(
+    def get_posts(
         self,
         is_published=True,
         select_related=True,
