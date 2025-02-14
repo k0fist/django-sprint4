@@ -80,21 +80,12 @@ class ProfileUserView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         author = self.get_object()
-        # is_published = self.request.user == author
+        check_publication = self.request.user != author
         context['profile'] = author
-        context['page_obj'] = get_paginated_posts(
+        context['page_obj'] = get_paginated_posts( 
             self.request,
-            (author.posts.get_necessary_posts(is_published=False)
-             if self.request.user == author
-             else author.posts.get_necessary_posts()
-             )
-            # author.posts.get_necessary_posts(
-            #     is_published=is_published,
-            #     select_related=True,
-            #     comment_count=True
-            # )
+            author.posts.get_necessary_posts(is_published=check_publication)
         )
-        print(self.request.user == author)
         return context
 
 
