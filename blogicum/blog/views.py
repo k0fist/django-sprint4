@@ -82,7 +82,7 @@ class ProfileUserView(DetailView):
         author = self.get_object()
         check_publication = self.request.user != author
         context['profile'] = author
-        context['page_obj'] = get_paginated_posts( 
+        context['page_obj'] = get_paginated_posts(
             self.request,
             author.posts.get_posts(is_published=check_publication)
         )
